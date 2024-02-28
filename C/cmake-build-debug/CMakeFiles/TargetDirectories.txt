@@ -1,0 +1,3 @@
+/Users/maciej_wojcik/Programowanie/programowanie_sieciowe/C/cmake-build-debug/CMakeFiles/C.dir
+/Users/maciej_wojcik/Programowanie/programowanie_sieciowe/C/cmake-build-debug/CMakeFiles/edit_cache.dir
+/Users/maciej_wojcik/Programowanie/programowanie_sieciowe/C/cmake-build-debug/CMakeFiles/rebuild_cache.dir
