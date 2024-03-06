@@ -3,18 +3,17 @@
 #include <string.h>
 
 bool printable_str(const char * buf) {
-    int i = 0;
-    while(buf[i] != '\0') {
-        if (buf[i] < 32 || buf[i] > 126) {
+    while(*buf != '\0') {
+        if (*buf < 32 || *buf > 126) {
             return 0;
         }
-        i++;
+        buf++;
     }
     return 1;
 }
 
 int main(void) {
-    char buf[] = "abcddd";
+    char buf[] = "abcd£dd";
 
     printf("%d", printable_str(buf));
 }
