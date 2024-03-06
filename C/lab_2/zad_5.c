@@ -13,8 +13,12 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 
-int main(void)
+int main(int argc, char* argv[])
 {
+    if (argc != 2) {
+        printf("Wrong number of arguments!");
+        return 0;
+    }
     int lst_sock;   // gniazdko nasłuchujące
     int clnt_sock;  // gniazdko połączone z bieżącym klientem
     int rc;         // "rc" to skrót słów "result code"
@@ -28,8 +32,9 @@ int main(void)
 
     struct sockaddr_in addr = {
             .sin_family = AF_INET,
-            .sin_addr = { .s_addr = htonl(INADDR_ANY) },
-            .sin_port = htons(20123)
+//            .sin_addr = { .s_addr = htonl(INADDR_ANY) },
+            .sin_addr.s_addr = inet_addr("127.0.0.1"),
+            .sin_port = htons(atoi(argv[1]))
     };
 
     rc = bind(lst_sock, (struct sockaddr *) & addr, sizeof(addr));
@@ -53,18 +58,18 @@ int main(void)
             return 1;
         }
 
-        unsigned char buf[16];
+//        unsigned char buf[32];
 
-        cnt = read(clnt_sock, buf, 16);
-        if (cnt == -1) {
-            perror("read");
-            return 1;
-        }
-        printf("read %zi bytes\n", cnt);
+//        cnt = read(clnt_sock, buf, 16);
+//        if (cnt == -1) {
+//            perror("read");
+//            return 1;
+//        }
+//        printf("read %zi bytes\n", cnt);
+        char message[] = "Hello, world!\n";
+//        memcpy(buf, message, sizeof(message));
 
-        memcpy(buf, "pong", 4);
-
-        cnt = write(clnt_sock, buf, 4);
+        cnt = write(clnt_sock, message, sizeof(message));
         if (cnt == -1) {
             perror("write");
             return 1;
