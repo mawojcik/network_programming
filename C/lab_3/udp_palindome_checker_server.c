@@ -17,6 +17,12 @@ void koniec(void) {
     }
 }
 
+void toLower(char * word) {
+    for(int i = 0; i < strlen(word); i++) {
+        word[i] = tolower(word[i]);
+    }
+}
+
 int isPalindrome(char word[]) {
     int leftIndex = 0;
     int rightIndex = strlen(word) - 1;
@@ -40,15 +46,16 @@ int countWords(char *buffer, int *numberOfPalindomes, int *numberOfAllWords) {
     }
     buffer[strlen(buffer)-1] = ' ';
 
-    char *token = strtok(buffer, " ");
+    char *word = strtok(buffer, " ");
 
-    while (token != NULL) {
+    while (word != NULL) {
+        toLower(word);
         (*numberOfAllWords)++;
 
-        if (isPalindrome(token)) {
+        if (isPalindrome(word)) {
             (*numberOfPalindomes)++;
         }
-        token = strtok(NULL, " ");
+        word = strtok(NULL, " ");
     }
     return 1;
 }
