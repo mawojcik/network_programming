@@ -17,6 +17,19 @@ void koniec(void) {
     }
 }
 
+int bufferValidator(char *buffer) {
+    int bufferLen = strlen(buffer) - 2;
+    if (buffer[0] == ' ' || buffer[bufferLen] == ' ') {
+        return 0;
+    }
+
+    for(int i = 0; i < bufferLen; i++) {
+        if(buffer[i] == ' ' && buffer[i+1] == ' ') {
+            return 0;
+        }
+    }
+    return 1;
+}
 void toLower(char * word) {
     for(int i = 0; i < strlen(word); i++) {
         word[i] = tolower(word[i]);
@@ -40,12 +53,8 @@ int isPalindrome(char word[]) {
     return 1;
 }
 
-int countWords(char *buffer, int *numberOfPalindomes, int *numberOfAllWords) {
-    if (buffer[0] == ' ') {
-        return -1;
-    }
+void countWords(char *buffer, int *numberOfPalindomes, int *numberOfAllWords) {
     buffer[strlen(buffer)-1] = ' ';
-
     char *word = strtok(buffer, " ");
 
     while (word != NULL) {
@@ -57,7 +66,6 @@ int countWords(char *buffer, int *numberOfPalindomes, int *numberOfAllWords) {
         }
         word = strtok(NULL, " ");
     }
-    return 1;
 }
 
 
@@ -111,9 +119,11 @@ int main(int argc, char *argv[]) {
             exit(1);
         }
 
-        if(countWords(buffer, &numberOfPalindomes, &numberOfAllWords) == -1) {
+
+        if(bufferValidator(buffer) == 0) {
             sprintf(message, "%s", "ERROR\n");
         } else {
+            countWords(buffer, &numberOfPalindomes, &numberOfAllWords);
             sprintf(message, "%d / %d\n", numberOfPalindomes, numberOfAllWords);
         }
 
