@@ -16,20 +16,33 @@ void koniec(void) {
         exit(1);
     }
 }
+//@TODO:
+// add checking for numbers - do not accept numbers
+// change this function to return input data length and -1 when buffer is invalid
+int bufferValidator(char *buffer, int bufferLength) {
+    int inputLength = bufferLength;
 
-int bufferValidator(char *buffer) {
-    int bufferLen = strlen(buffer) - 2;
-    if (buffer[0] == ' ' || buffer[bufferLen] == ' ') {
+    // deleting carriage return and line feed when found
+    for (int i = 0; i < bufferLength; i++) {
+        if (buffer[i] == 10 || buffer[i] == 13) {
+        }
+    }
+    printf("inputLength: %d\n", inputLength);
+
+    // return ERROR when space on first or last char
+    if (buffer[0] == ' ' || buffer[inputLength-1] == ' ') {
         return 0;
     }
 
-    for(int i = 0; i < bufferLen; i++) {
+    // return ERROR when two consecutive spaces found
+    for(int i = 0; i < inputLength; i++) {
         if(buffer[i] == ' ' && buffer[i+1] == ' ') {
             return 0;
         }
     }
     return 1;
 }
+
 void toLower(char * word) {
     for(int i = 0; i < strlen(word); i++) {
         word[i] = tolower(word[i]);
@@ -54,7 +67,6 @@ int isPalindrome(char word[]) {
 }
 
 void countWords(char *buffer, int *numberOfPalindomes, int *numberOfAllWords) {
-    buffer[strlen(buffer)-1] = ' ';
     char *word = strtok(buffer, " ");
 
     while (word != NULL) {
@@ -70,10 +82,6 @@ void countWords(char *buffer, int *numberOfPalindomes, int *numberOfAllWords) {
 
 
 int main(int argc, char *argv[]) {
-    if (argc != 2) {
-        printf("Wrong number of arguments!");
-        exit(1);
-    }
     // Creating socket
     serwer = socket(AF_INET, SOCK_DGRAM, 0);
 
@@ -92,7 +100,7 @@ int main(int argc, char *argv[]) {
             .sin_family = AF_INET,
 //            .sin_addr.s_addr = htonl(INADDR_ANY),
             .sin_addr.s_addr = inet_addr("127.0.0.1"),
-            .sin_port = htons(atoi(argv[1]))
+            .sin_port = htons(2020)
     };
 
     // Ustalenie adresu lokalnego końca gniazdka
@@ -112,15 +120,17 @@ int main(int argc, char *argv[]) {
 
         unsigned int len = sizeof(klient);
 
-        int receive_status = recvfrom(serwer, (char *)buffer, 1024, 0, (struct sockaddr *)&klient, &len);
+        int bufferLength = recvfrom(serwer, (char *)buffer, 1024, 0, (struct sockaddr *)&klient, &len);
 
-        if (receive_status == -1) {
+//        printf("%d\n", receive_status);
+
+        if (bufferLength == -1) {
             perror("recivefrom error");
             exit(1);
         }
 
 
-        if(bufferValidator(buffer) == 0) {
+        if(bufferValidator(buffer, bufferLength) == 0) {
             sprintf(message, "%s", "ERROR\n");
         } else {
             countWords(buffer, &numberOfPalindomes, &numberOfAllWords);
@@ -128,7 +138,7 @@ int main(int argc, char *argv[]) {
         }
 
         int send_status = sendto(serwer, message, strlen(message), 0, (struct sockaddr *)&klient, len);
-        
+
         if (send_status != strlen(message)) {
             perror("sendto error");
             exit(1);
