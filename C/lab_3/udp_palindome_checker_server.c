@@ -16,31 +16,40 @@ void koniec(void) {
         exit(1);
     }
 }
-//@TODO:
-// add checking for numbers - do not accept numbers
-// change this function to return input data length and -1 when buffer is invalid
+
 int bufferValidator(char *buffer, int bufferLength) {
     int inputLength = bufferLength;
 
     // deleting carriage return and line feed when found
+    // checking if only letters and spaces are in input
     for (int i = 0; i < bufferLength; i++) {
         if (buffer[i] == 10 || buffer[i] == 13) {
+            buffer[i] = ' '; //delete character
+            inputLength--;
+            continue; // do not check if printable char when found \n or \r
+        }
+        if (((buffer[i] < 65 || buffer[i] > 90) && (buffer[i] < 97 || buffer[i] > 122)) && buffer[i] != 32) {
+            printf("WRONG INPUT: %c\n", buffer[i]);
+            return -1;
         }
     }
-    printf("inputLength: %d\n", inputLength);
+
+    if (inputLength == 0) { // allow for empty input
+        return 1;
+    }
 
     // return ERROR when space on first or last char
     if (buffer[0] == ' ' || buffer[inputLength-1] == ' ') {
-        return 0;
+        return -1;
     }
 
     // return ERROR when two consecutive spaces found
     for(int i = 0; i < inputLength; i++) {
         if(buffer[i] == ' ' && buffer[i+1] == ' ') {
-            return 0;
+            return -1;
         }
     }
-    return 1;
+    return inputLength;
 }
 
 void toLower(char * word) {
@@ -66,15 +75,24 @@ int isPalindrome(char word[]) {
     return 1;
 }
 
-void countWords(char *buffer, int *numberOfPalindomes, int *numberOfAllWords) {
-    char *word = strtok(buffer, " ");
+void correctInput(char *buffer, char *correctedInput, int inputLength) {
+    // copy data from buffer to correctedInput without optional ending chars
+    memcpy(correctedInput, buffer, inputLength);
+}
 
+void countWords(char *buffer, int *numberOfPalindomes, int *numberOfAllWords) {
+    // new var, only with correct input
+    char *word = strtok(buffer, " ");
     while (word != NULL) {
+        printf("word: %s, word len: %lu\n", word, strlen(word));
+
         toLower(word);
         (*numberOfAllWords)++;
 
         if (isPalindrome(word)) {
             (*numberOfPalindomes)++;
+            printf("palindorme: %s\n", word);
+
         }
         word = strtok(NULL, " ");
     }
@@ -115,7 +133,8 @@ int main(int argc, char *argv[]) {
         int numberOfPalindomes = 0;
         int numberOfAllWords = 0;
         char buffer[1024] = "";
-        char message[100] = "";
+        char outputMessage[100] = "";
+        char correctedInput[1024] = "";
 
 
         unsigned int len = sizeof(klient);
@@ -129,17 +148,18 @@ int main(int argc, char *argv[]) {
             exit(1);
         }
 
-
-        if(bufferValidator(buffer, bufferLength) == 0) {
-            sprintf(message, "%s", "ERROR\n");
+        int inputLength = bufferValidator(buffer, bufferLength);
+        if(inputLength == -1) {
+            sprintf(outputMessage, "%s", "ERROR\n");
         } else {
-            countWords(buffer, &numberOfPalindomes, &numberOfAllWords);
-            sprintf(message, "%d / %d\n", numberOfPalindomes, numberOfAllWords);
+            correctInput(buffer, correctedInput, inputLength);
+            countWords(correctedInput, &numberOfPalindomes, &numberOfAllWords);
+            sprintf(outputMessage, "%d/%d\n", numberOfPalindomes, numberOfAllWords);
         }
 
-        int send_status = sendto(serwer, message, strlen(message), 0, (struct sockaddr *)&klient, len);
+        int send_status = sendto(serwer, outputMessage, strlen(outputMessage), 0, (struct sockaddr *)&klient, len);
 
-        if (send_status != strlen(message)) {
+        if (send_status != strlen(outputMessage)) {
             perror("sendto error");
             exit(1);
         }
