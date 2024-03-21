@@ -148,14 +148,14 @@ int main(int argc, char *argv[]) {
         if (bufferLength <= 1024) {
             int inputLength = bufferValidator(buffer, bufferLength);
             if(inputLength == -1) {
-                sprintf(outputMessage, "%s", "ERROR\n");
+                sprintf(outputMessage, "%s", "ERROR");
             } else {
                 correctInput(buffer, correctedInput, inputLength);
                 countWords(correctedInput, &numberOfPalindomes, &numberOfAllWords);
-                sprintf(outputMessage, "%d/%d\n", numberOfPalindomes, numberOfAllWords);
+                sprintf(outputMessage, "%d/%d", numberOfPalindomes, numberOfAllWords);
             }
         } else {
-            sprintf(outputMessage, "%s", "ERROR\n");
+            sprintf(outputMessage, "%s", "ERROR");
         }
 
         int send_status = sendto(serwer, outputMessage, strlen(outputMessage), 0, (struct sockaddr *)&klient, len);
