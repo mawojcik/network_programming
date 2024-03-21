@@ -121,7 +121,7 @@ int main(int argc, char *argv[]) {
             .sin_port = htons(2020)
     };
 
-    // Ustalenie adresu lokalnego końca gniazdka
+    // bind socket to address and port
     if (bind(serwer, (struct sockaddr *)&adres, sizeof(adres)) == -1) {
         perror("bind error");
         exit(1);
@@ -132,29 +132,30 @@ int main(int argc, char *argv[]) {
     while (1) {
         int numberOfPalindomes = 0;
         int numberOfAllWords = 0;
-        char buffer[1024] = "";
+        char buffer[1025] = "";
         char outputMessage[100] = "";
         char correctedInput[1024] = "";
 
 
         unsigned int len = sizeof(klient);
 
-        int bufferLength = recvfrom(serwer, (char *)buffer, 1024, 0, (struct sockaddr *)&klient, &len);
-
-//        printf("%d\n", receive_status);
+        int bufferLength = recvfrom(serwer, (char *)buffer, 1025, 0, (struct sockaddr *)&klient, &len);
 
         if (bufferLength == -1) {
             perror("recivefrom error");
             exit(1);
         }
-
-        int inputLength = bufferValidator(buffer, bufferLength);
-        if(inputLength == -1) {
-            sprintf(outputMessage, "%s", "ERROR\n");
+        if (bufferLength <= 1024) {
+            int inputLength = bufferValidator(buffer, bufferLength);
+            if(inputLength == -1) {
+                sprintf(outputMessage, "%s", "ERROR\n");
+            } else {
+                correctInput(buffer, correctedInput, inputLength);
+                countWords(correctedInput, &numberOfPalindomes, &numberOfAllWords);
+                sprintf(outputMessage, "%d/%d\n", numberOfPalindomes, numberOfAllWords);
+            }
         } else {
-            correctInput(buffer, correctedInput, inputLength);
-            countWords(correctedInput, &numberOfPalindomes, &numberOfAllWords);
-            sprintf(outputMessage, "%d/%d\n", numberOfPalindomes, numberOfAllWords);
+            sprintf(outputMessage, "%s", "ERROR\n");
         }
 
         int send_status = sendto(serwer, outputMessage, strlen(outputMessage), 0, (struct sockaddr *)&klient, len);
