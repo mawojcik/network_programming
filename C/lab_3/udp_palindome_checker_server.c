@@ -18,38 +18,30 @@ void koniec(void) {
 }
 
 int bufferValidator(char *buffer, int bufferLength) {
-    int inputLength = bufferLength;
-
-    // deleting carriage return and line feed when found
-    // checking if only letters and spaces are in input
+    // checking if only letters and spaces are in input - also not accepting \n \r \t
     for (int i = 0; i < bufferLength; i++) {
-        if (buffer[i] == 10 || buffer[i] == 13) {
-            buffer[i] = ' '; //delete character
-            inputLength--;
-            continue; // do not check if printable char when found \n or \r
-        }
         if (((buffer[i] < 65 || buffer[i] > 90) && (buffer[i] < 97 || buffer[i] > 122)) && buffer[i] != 32) {
             printf("WRONG INPUT: %c\n", buffer[i]);
             return -1;
         }
     }
 
-    if (inputLength == 0) { // allow for empty input
+    if (bufferLength == 0) { // allow for empty input
         return 1;
     }
 
     // return ERROR when space on first or last char
-    if (buffer[0] == ' ' || buffer[inputLength-1] == ' ') {
+    if (buffer[0] == ' ' || buffer[bufferLength-1] == ' ') {
         return -1;
     }
 
     // return ERROR when two consecutive spaces found
-    for(int i = 0; i < inputLength; i++) {
+    for(int i = 0; i < bufferLength; i++) {
         if(buffer[i] == ' ' && buffer[i+1] == ' ') {
             return -1;
         }
     }
-    return inputLength;
+    return bufferLength;
 }
 
 void toLower(char * word) {
