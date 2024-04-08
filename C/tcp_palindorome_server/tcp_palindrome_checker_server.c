@@ -34,6 +34,7 @@
 #include <sys/select.h>
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <ctype.h>
 
 // Te dwa pliki nagłówkowe są specyficzne dla Linuksa z biblioteką glibc:
 #include <sys/epoll.h>
@@ -233,6 +234,154 @@ ssize_t read_rot13_write(int sock)
     return bytes_read;
 }
 
+
+int bufferValidator(char *buffer, int bufferLength) {
+    int dataLength = bufferLength;
+
+    printf("input bytes: \n");
+    int i;
+    for (i = 0; i < bufferLength; i++) {
+        printf("%d ", buffer[i]);
+    }
+    printf("\n");
+
+
+    if ((buffer[bufferLength-2] == 13 && buffer[bufferLength - 1] == 10)) {
+        dataLength = dataLength - 2;
+    } else {
+        printf("NO CR LF at the end\n");
+        return -1;
+    }
+
+    if (dataLength == 0) { // allow for empty input
+        return 1;
+    }
+
+// zmienić na gotową funkcę
+    for (int i = 0; i < dataLength; i++) {
+        if (((buffer[i] < 65 || buffer[i] > 90) && (buffer[i] < 97 || buffer[i] > 122)) && buffer[i] != 32) {
+            printf("WRONG INPUT: %c\n", buffer[i]);
+            return -1;
+        }
+    }
+
+    // return ERROR when space on first or last char
+    if (buffer[0] == ' ' || buffer[dataLength-1] == ' ') {
+        return -1;
+    }
+
+    // return ERROR when two consecutive spaces found
+    for(int i = 0; i < dataLength; i++) {
+        if(buffer[i] == ' ' && buffer[i+1] == ' ') {
+            return -1;
+        }
+    }
+    return dataLength;
+}
+
+void correctInput(char *buffer, char *correctedInput, int inputLength) {
+    // copy data from buffer to correctedInput without optional ending chars
+    memcpy(correctedInput, buffer, inputLength);
+}
+
+void toLower(char * word) {
+    for(int i = 0; i < strlen(word); i++) {
+        word[i] = tolower(word[i]);
+    }
+}
+
+int isPalindrome(char word[]) {
+    int leftIndex = 0;
+    int rightIndex = strlen(word) - 1;
+    if (rightIndex == 0) {
+        return 1;
+    }
+
+    while (leftIndex < rightIndex) {
+        if (word[leftIndex] != word[rightIndex]) {
+            return 0;
+        }
+        leftIndex++;
+        rightIndex--;
+    }
+    return 1;
+}
+
+void countWords(char *buffer, int *numberOfPalindomes, int *numberOfAllWords) {
+    // new var, only with correct input
+    char *word = strtok(buffer, " ");
+    while (word != NULL) {
+        printf("word: %s, word len: %lu\n", word, strlen(word));
+
+        toLower(word);
+        (*numberOfAllWords)++;
+        printf("MARK 1\n");
+
+        if (isPalindrome(word)) {
+            printf("MARK 2\n");
+
+            (*numberOfPalindomes)++;
+            printf("palindorme: %s\n", word);
+
+        }
+        printf("MARK 3\n");
+
+        word = strtok(NULL, " ");
+        printf("MARK 4\n");
+
+    }
+}
+
+
+ssize_t read_is_palindrome_write(int sock)
+{
+    char buf[2048] = "";
+    char outputMessage[12] = "";
+    int numberOfPalindromes = 0;
+    int numberOfAllWords = 0;
+    char * dataPtr;
+    char correctedInput[1024] = "";
+
+
+    ssize_t bytes_read = read_verbose(sock, buf, sizeof(buf));
+    if (bytes_read < 0) {
+        return -1;
+    }
+
+    int inputLength;
+    if(bytes_read <= 1024) {
+        inputLength = bufferValidator(buf, bytes_read);
+        if(inputLength == -1) {
+            snprintf(outputMessage, sizeof(outputMessage), "%s", "ERROR\r\n");
+            printf("%s", "ERROR\r\n");
+        } else {
+            correctInput(buf, correctedInput, inputLength);
+            countWords(correctedInput, &numberOfPalindromes, &numberOfAllWords);
+            snprintf(outputMessage, sizeof(outputMessage), "%d/%d\r\n", numberOfPalindromes, numberOfAllWords);
+            printf("%d/%d\r\n", numberOfPalindromes, numberOfAllWords);
+        }
+    } else {
+        snprintf(outputMessage, sizeof(outputMessage), "%s", "ERROR\r\n");
+        printf("%s", "ERROR\r\n");
+    }
+
+    dataPtr = outputMessage;
+    size_t data_len = strlen(outputMessage);
+    printf("DATA LEN: %zu\n", data_len);
+    while (data_len > 0) {
+        ssize_t bytes_written = write_verbose(sock, dataPtr, data_len);
+        if (bytes_written < 0) {
+            return -1;
+        }
+        dataPtr = dataPtr + bytes_written;
+        data_len = data_len - bytes_written;
+    }
+
+    return bytes_read;
+}
+
+
+
 int add_fd_to_epoll(int fd, int epoll_fd)
 {
     log_printf("adding descriptor %i to epoll instance %i", fd, epoll_fd);
@@ -307,7 +456,7 @@ void epoll_loop(int srv_sock)
 
             } else {    // fd != srv_sock
 
-                if (read_rot13_write(fd) <= 0) {
+                if (read_is_palindrome_write(fd) <= 0) {
                     // druga strona zamknęła połączenie lub wystąpił błąd
                     remove_fd_from_epoll(fd, epoll_fd);
                     close_verbose(fd);
@@ -341,43 +490,39 @@ void epoll_loop(int srv_sock)
 
 // Do napisania została jeszcze tylko funkcja main, i to będzie wszystko.
 
-const struct {
-    const char * name;
-    void (*func_ptr)(int);
-} srv_modes[] = {
-        { "epoll", epoll_loop },
-};
+//const struct {
+//    const char * name;
+//    void (*func_ptr)(int);
+//} srv_modes[] = {
+//        { "epoll", epoll_loop },
+//};
 
 int main(int argc, char * argv[])
 {
-    long int srv_port;
+    long int srv_port = 2020;
     int srv_sock;
-    void (*main_loop)(int);
+//    void (*main_loop)(int);
 
     // Przetwórz argumenty podane w linii komend, ustaw na ich podstawie
     // wartości zmiennych srv_port i main_loop.
 
-    if (argc != 3) {
-        goto bad_args;
-    }
+//    main_loop = NULL;
+//    for (int i = 0; i < sizeof(srv_modes) / sizeof(srv_modes[0]); ++i) {
+//        if (strcmp(argv[1], srv_modes[i].name) == 0) {
+//            main_loop = srv_modes[i].func_ptr;
+//            break;
+//        }
+//    }
+//    if (main_loop == NULL) {
+//        goto bad_args;
+//    }
 
-    main_loop = NULL;
-    for (int i = 0; i < sizeof(srv_modes) / sizeof(srv_modes[0]); ++i) {
-        if (strcmp(argv[1], srv_modes[i].name) == 0) {
-            main_loop = srv_modes[i].func_ptr;
-            break;
-        }
-    }
-    if (main_loop == NULL) {
-        goto bad_args;
-    }
-
-    char * p;
-    errno = 0;
-    srv_port = strtol(argv[2], &p, 10);
-    if (errno != 0 || *p != '\0' || srv_port < 1024 || srv_port > 65535) {
-        goto bad_args;
-    }
+//    char * p;
+//    errno = 0;
+//    srv_port = strtol(argv[2], &p, 10);
+//    if (errno != 0 || *p != '\0' || srv_port < 1024 || srv_port > 65535) {
+//        goto bad_args;
+//    }
 
     // Stwórz gniazdko i uruchom pętlę odbierającą przychodzące połączenia.
 
@@ -386,7 +531,7 @@ int main(int argc, char * argv[])
     }
 
     log_printf("starting main loop");
-    main_loop(srv_sock);
+    epoll_loop(srv_sock);
     log_printf("main loop done");
 
     if (close(srv_sock) == -1) {
@@ -396,13 +541,13 @@ int main(int argc, char * argv[])
 
     return 0;
 
-    bad_args:
-    fprintf(stderr, "Usage: %s mode port\n", argv[0]);
-    fprintf(stderr, "available server modes:\n");
-    for (int i = 0; i < sizeof(srv_modes) / sizeof(srv_modes[0]); ++i) {
-        fprintf(stderr, "    %s\n", srv_modes[i].name);
-    }
-    fprintf(stderr, "listening port number range: 1024-65535\n");
+//    bad_args:
+//    fprintf(stderr, "Usage: %s mode port\n", argv[0]);
+//    fprintf(stderr, "available server modes:\n");
+//    for (int i = 0; i < sizeof(srv_modes) / sizeof(srv_modes[0]); ++i) {
+//        fprintf(stderr, "    %s\n", srv_modes[i].name);
+//    }
+//    fprintf(stderr, "listening port number range: 1024-65535\n");
     fail:
     return 1;
 }
