@@ -319,20 +319,13 @@ void countWords(char *buffer, int *numberOfPalindomes, int *numberOfAllWords) {
 
         toLower(word);
         (*numberOfAllWords)++;
-        printf("MARK 1\n");
 
         if (isPalindrome(word)) {
-            printf("MARK 2\n");
-
             (*numberOfPalindomes)++;
             printf("palindorme: %s\n", word);
 
         }
-        printf("MARK 3\n");
-
         word = strtok(NULL, " ");
-        printf("MARK 4\n");
-
     }
 }
 
@@ -375,7 +368,7 @@ ssize_t read_is_palindrome_write(int sock)
         char correctedInput[1024] = "";
 
         printf("Coming into while\n");
-        char buf[2048] = "";
+        char readBuf[2048] = "";
         // if leftovers in buff to process, dont read from socket
         // ---> if \r\n not found in buffer, read from socket
 
@@ -387,7 +380,7 @@ ssize_t read_is_palindrome_write(int sock)
         }
 
 
-        bytes_read = read_verbose(sock, buf, sizeof(buf));
+        bytes_read = read_verbose(sock, readBuf, sizeof(readBuf));
         if (bytes_read < 0 || bytes_read > 1024) {
             return -1;
         }
@@ -397,12 +390,12 @@ ssize_t read_is_palindrome_write(int sock)
         }
 
         skip_reading:
-        //wholeBuf = wholeBuf + buf
-        sprintf(wholeBuf + strlen(wholeBuf), "%s", buf);
+
+        //wholeBuf = wholeBuf + readBuf
+        sprintf(wholeBuf + strlen(wholeBuf), "%s", readBuf);
         printf("Wchodzimy sprawdzic\n");
         // run below with wholeBuf
         oneQueryLength = isCompleteQuery(wholeBuf, strlen(wholeBuf));
-//        pr
         if (oneQueryLength > 0) {
             //delete first valid query from wholeBuf
             printf("valid query\n");
@@ -602,7 +595,7 @@ void epoll_loop(int srv_sock)
 
 int main(int argc, char * argv[])
 {
-    long int srv_port = 2022;
+    long int srv_port = 2020;
     int srv_sock;
 //    void (*main_loop)(int);
 
