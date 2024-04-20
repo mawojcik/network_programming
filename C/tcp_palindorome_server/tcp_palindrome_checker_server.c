@@ -175,6 +175,8 @@ ssize_t read_verbose(int fd, void * buf, size_t nbytes)
 
 ssize_t write_verbose(int fd, void * buf, size_t nbytes)
 {
+    signal(SIGPIPE, SIG_IGN);
+
     log_printf("calling write() on descriptor %i", fd);
     ssize_t rv = write(fd, buf, nbytes);
     if (rv == -1) {
@@ -200,56 +202,9 @@ int close_verbose(int fd)
 
 // Procedury przetwarzające pojedynczą porcję danych przysłaną przez klienta.
 
-void rot13(char * data, size_t data_len)
-{
-    char * p = data;
-    char * e = data + data_len;
-    for (; p < e; ++p) {
-        if (*p >= 'a' && *p <= 'z') {
-            *p = (*p - 'a' + 13) % 26 + 'a';
-        } else if (*p >= 'A' && *p <= 'Z') {
-            *p = (*p - 'A' + 13) % 26 + 'A';
-        }
-    }
-}
-
-ssize_t read_rot13_write(int sock)
-{
-    char buf[4096];
-
-    ssize_t bytes_read = read_verbose(sock, buf, sizeof(buf));
-    if (bytes_read < 0) {
-        return -1;
-    }
-
-    rot13(buf, bytes_read);
-
-    char * data = buf;
-    size_t data_len = bytes_read;
-    while (data_len > 0) {
-        ssize_t bytes_written = write_verbose(sock, data, data_len);
-        if (bytes_written < 0) {
-            return -1;
-        }
-        data = data + bytes_written;
-        data_len = data_len - bytes_written;
-    }
-
-    return bytes_read;
-}
-
-
 int bufferValidator(char *buffer, int bufferLength) {
     int dataLength = bufferLength;
-
-    printf("input bytes in bufferValidator: \n");
-    int i;
-    for (i = 0; i < bufferLength; i++) {
-        printf("%d ", buffer[i]);
-    }
-    printf("\n");
-
-
+    
     if ((buffer[bufferLength-2] == 13 && buffer[bufferLength - 1] == 10)) {
         dataLength = dataLength - 2;
     } else {
@@ -261,7 +216,7 @@ int bufferValidator(char *buffer, int bufferLength) {
         return 1;
     }
 
-// zmienić na gotową funkcę
+    //TODO: zmienić na gotową funkcę
     for (int i = 0; i < dataLength; i++) {
         if (((buffer[i] < 65 || buffer[i] > 90) && (buffer[i] < 97 || buffer[i] > 122)) && buffer[i] != 32) {
             printf("WRONG INPUT: %c\n", buffer[i]);
@@ -312,11 +267,8 @@ int isPalindrome(char word[]) {
 }
 
 void countWords(char *buffer, int *numberOfPalindomes, int *numberOfAllWords) {
-    // new var, only with correct input
     char *word = strtok(buffer, " ");
     while (word != NULL) {
-        printf("word: %s, word len: %lu\n", word, strlen(word));
-
         toLower(word);
         (*numberOfAllWords)++;
 
@@ -331,55 +283,43 @@ void countWords(char *buffer, int *numberOfPalindomes, int *numberOfAllWords) {
 
 
 int isCompleteQuery(char *buffer, int inputLength) {
-    printf("checking isCompleteQuery\n");
     for (int i = 1; i <= inputLength; i++) {
         if ((buffer[i] == 10 && buffer[i - 1] == 13)) {
             // return length of current query
-            printf("complete query len: %d\n", i+1);
             return i + 1;
             // return at least 2 bytes ('\r' and '\n')
         }
     }
-    printf("input bytes: \n");
-    int i;
-    for (i = 0; i < inputLength; i++) {
-        printf("%d ", buffer[i]);
-    }
-    printf("\n");
-    printf("no CR LF encountered\n");
     // no CR LF encountered
     return 0;
 }
 
-ssize_t read_is_palindrome_write(int sock)
+ssize_t read_is_palindrome_write(int sock, char *bufferFromAllBuffers)
 {
     char outputMessage[12] = "";
-
     char * dataPtr;
     char query[1024] = "";
-
-// read in while until \r\n encountered, then do bufferValidator and so on
     int oneQueryLength = 0;
     char wholeBuf[2048] = "";
+    memcpy(wholeBuf, bufferFromAllBuffers, strlen(bufferFromAllBuffers));
+
     ssize_t bytes_read = 0;
+    int inputWithoutCRLFLength = 0;
+    int queryToMoveLen = 0;
     do {
         int numberOfPalindromes = 0;
         int numberOfAllWords = 0;
         char correctedInput[1024] = "";
 
-        printf("Coming into while\n");
-        char readBuf[2048] = "";
-        // if leftovers in buff to process, dont read from socket
         // ---> if \r\n not found in buffer, read from socket
-
         for (int i = 0; i < strlen(wholeBuf); i++) {
             if ((wholeBuf[i] == 10 && wholeBuf[i - 1] == 13)) {
-                // znaleziono /r/n
+                //  /r/n found in previous query
                 goto skip_reading;
             }
         }
 
-
+        char readBuf[2048] = "";
         bytes_read = read_verbose(sock, readBuf, sizeof(readBuf));
         if (bytes_read < 0 || bytes_read > 1024) {
             return -1;
@@ -388,25 +328,22 @@ ssize_t read_is_palindrome_write(int sock)
             printf("Connection closed\n");
             return -1;
         }
+        //wholeBuf = wholeBuf + readBuf
+        sprintf(wholeBuf + strlen(wholeBuf), "%s", readBuf);
+
 
         skip_reading:
 
-        //wholeBuf = wholeBuf + readBuf
-        sprintf(wholeBuf + strlen(wholeBuf), "%s", readBuf);
-        printf("Wchodzimy sprawdzic\n");
-        // run below with wholeBuf
         oneQueryLength = isCompleteQuery(wholeBuf, strlen(wholeBuf));
+        queryToMoveLen = oneQueryLength;
+        //deleting first valid query from wholeBuf:
         if (oneQueryLength > 0) {
-            //delete first valid query from wholeBuf
-            printf("valid query\n");
+            //query - first found valid query
             //clear query
             strcpy(query, "");
+            memcpy(query, wholeBuf, oneQueryLength);
 
-            memcpy(query, wholeBuf, oneQueryLength); //wpisanie do query całego buf - w kolejnym przejsciu buf jest pusty co zeruje mi query
-            //query - first found valid query
-            printf("query LEEEEEEEEEEN: %d\n", oneQueryLength); // WATAFAK DLACZEGO DO QUERY WPISUJE MI SIE CALY wholeBuf
-
-            int inputWithoutCRLFLength = bufferValidator(query, oneQueryLength);
+            inputWithoutCRLFLength = bufferValidator(query, oneQueryLength);
             if(inputWithoutCRLFLength == -1) {
                 snprintf(outputMessage, sizeof(outputMessage), "%s", "ERROR\r\n");
                 printf("%s", "ERROR\r\n");
@@ -416,12 +353,10 @@ ssize_t read_is_palindrome_write(int sock)
                 snprintf(outputMessage, sizeof(outputMessage), "%d/%d\r\n", numberOfPalindromes, numberOfAllWords);
                 printf("%d/%d\r\n", numberOfPalindromes, numberOfAllWords);
             }
-
-            // send results
-
+            
+            // send results:
             dataPtr = outputMessage;
             size_t data_len = strlen(outputMessage);
-            printf("DATA LEN: %zu\n", data_len);
             while (data_len > 0) {
                 ssize_t bytes_written = write_verbose(sock, dataPtr, data_len);
                 if (bytes_written < 0) {
@@ -429,50 +364,22 @@ ssize_t read_is_palindrome_write(int sock)
                 }
                 dataPtr = dataPtr + bytes_written;
                 data_len = data_len - bytes_written;
-                printf("still in writing loop\n");
             }
 
-//            return bytes_read;
+            memmove(wholeBuf, wholeBuf+queryToMoveLen, strlen(wholeBuf) - queryToMoveLen); // nie powinienem usuwać z /r/n?????????????
+            for (int i = strlen(wholeBuf) - queryToMoveLen; i < 30; i++) {
+                wholeBuf[i] = '\0';
+            }
+            // clean bufferFromAllBuffers:
+            for (int i = 0; i < 30; i++) {
+                bufferFromAllBuffers[i] = '\0';
+            }
+            memcpy(bufferFromAllBuffers, wholeBuf, strlen(wholeBuf));
 
-            memmove(wholeBuf, wholeBuf+oneQueryLength, strlen(wholeBuf) - inputWithoutCRLFLength);
-            oneQueryLength = 0;
+            oneQueryLength = isCompleteQuery(wholeBuf, strlen(wholeBuf));
         }
-    } while (oneQueryLength == 0);
-
-
-
-
-
-
-//    int inputWithoutCRLFLength = 0;
-//    if(bytes_read <= 1024) {
-//        inputWithoutCRLFLength = bufferValidator(buf, bytes_read);
-//        if(inputWithoutCRLFLength == -1) {
-//            snprintf(outputMessage, sizeof(outputMessage), "%s", "ERROR\r\n");
-//            printf("%s", "ERROR\r\n");
-//        } else {
-//            correctInput(buf, correctedInput, inputWithoutCRLFLength);
-//            countWords(correctedInput, &numberOfPalindromes, &numberOfAllWords);
-//            snprintf(outputMessage, sizeof(outputMessage), "%d/%d\r\n", numberOfPalindromes, numberOfAllWords);
-//            printf("%d/%d\r\n", numberOfPalindromes, numberOfAllWords);
-//        }
-//    } else {
-//        snprintf(outputMessage, sizeof(outputMessage), "%s", "ERROR\r\n");
-//        printf("%s", "ERROR\r\n");
-//    }
-
-//    dataPtr = outputMessage;
-//    size_t data_len = strlen(outputMessage);
-//    printf("DATA LEN: %zu\n", data_len);
-//    while (data_len > 0) {
-//        ssize_t bytes_written = write_verbose(sock, dataPtr, data_len);
-//        if (bytes_written < 0) {
-//            return -1;
-//        }
-//        dataPtr = dataPtr + bytes_written;
-//        data_len = data_len - bytes_written;
-//    }
-//
+    } while (oneQueryLength != 0);
+    
     return bytes_read;
 }
 
@@ -503,6 +410,8 @@ int remove_fd_from_epoll(int fd, int epoll_fd)
 }
 
 #define MAX_EVENTS 8
+#define MAX_CLIENTS_NUMBER 500
+char allBuffers[MAX_CLIENTS_NUMBER][1024];
 
 void epoll_loop(int srv_sock)
 {
@@ -551,10 +460,19 @@ void epoll_loop(int srv_sock)
                 }
 
             } else {    // fd != srv_sock
-
-                if (read_is_palindrome_write(fd) < 0) {
+                // wybierz odpowiedni bufer
+                printf("DATA ON FD: ");
+                for (int i = 0; i < strlen((allBuffers[fd])); i++) {
+                    printf("%d ", allBuffers[fd][i]);
+                }
+                printf("\n");
+                if (read_is_palindrome_write(fd, allBuffers[fd]) < 0) {
                     // druga strona zamknęła połączenie lub wystąpił błąd
                     remove_fd_from_epoll(fd, epoll_fd);
+                    // clead used buffer
+                    for (int j = 0; i < 1024; i++) {
+                        allBuffers[fd][j] = '\0';
+                    }
                     close_verbose(fd);
                 }
 
