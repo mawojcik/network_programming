@@ -344,7 +344,7 @@ ssize_t read_is_palindrome_write(int sock, char *bufferFromAllBuffers)
             memcpy(query, wholeBuf, oneQueryLength);
 
             inputWithoutCRLFLength = bufferValidator(query, oneQueryLength);
-            if(inputWithoutCRLFLength == -1) {
+            if (inputWithoutCRLFLength == -1) {
                 snprintf(outputMessage, sizeof(outputMessage), "%s", "ERROR\r\n");
                 printf("%s", "ERROR\r\n");
             } else {
@@ -367,11 +367,11 @@ ssize_t read_is_palindrome_write(int sock, char *bufferFromAllBuffers)
             }
 
             memmove(wholeBuf, wholeBuf+queryToMoveLen, strlen(wholeBuf) - queryToMoveLen); // nie powinienem usuwać z /r/n?????????????
-            for (int i = strlen(wholeBuf) - queryToMoveLen; i < 30; i++) {
+            for (int i = strlen(wholeBuf) - queryToMoveLen; i < 1024; i++) {
                 wholeBuf[i] = '\0';
             }
             // clean bufferFromAllBuffers:
-            for (int i = 0; i < 30; i++) {
+            for (int i = 0; i < 1024; i++) {
                 bufferFromAllBuffers[i] = '\0';
             }
             memcpy(bufferFromAllBuffers, wholeBuf, strlen(wholeBuf));
@@ -412,6 +412,12 @@ int remove_fd_from_epoll(int fd, int epoll_fd)
 #define MAX_EVENTS 8
 #define MAX_CLIENTS_NUMBER 500
 char allBuffers[MAX_CLIENTS_NUMBER][1024];
+
+struct client {
+    char buffer[1024];
+    int data_size;
+};
+struct client clients[MAX_CLIENTS_NUMBER];
 
 void epoll_loop(int srv_sock)
 {
@@ -462,8 +468,8 @@ void epoll_loop(int srv_sock)
             } else {    // fd != srv_sock
                 // wybierz odpowiedni bufer
                 printf("DATA ON FD: ");
-                for (int i = 0; i < strlen((allBuffers[fd])); i++) {
-                    printf("%d ", allBuffers[fd][i]);
+                for (int i = 0; i < strlen(allBuffers[fd]); i++) {
+                    printf("i=%d %d ", i, allBuffers[fd][i]);
                 }
                 printf("\n");
                 if (read_is_palindrome_write(fd, allBuffers[fd]) < 0) {
@@ -513,7 +519,7 @@ void epoll_loop(int srv_sock)
 
 int main(int argc, char * argv[])
 {
-    long int srv_port = 2020;
+    long int srv_port = 2021;
     int srv_sock;
 //    void (*main_loop)(int);
 
