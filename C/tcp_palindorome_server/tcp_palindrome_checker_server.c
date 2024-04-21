@@ -210,40 +210,31 @@ int close_verbose(int fd)
 
 // Procedury przetwarzające pojedynczą porcję danych przysłaną przez klienta.
 
-int bufferValidator(char *buffer, int bufferLength) {
-    int dataLength = bufferLength;
-
-    if ((buffer[bufferLength-2] == 13 && buffer[bufferLength - 1] == 10)) {
-        dataLength = dataLength - 2;
-    } else {
-        printf("NO CR LF at the end\n");
-        return -1;
-    }
-
-    if (dataLength == 0) { // allow for empty input
-        return 1;
+bool bufferIsValid(char *buffer, int bufferLength) {
+    if (bufferLength == 0) { // allow for empty input
+        return true;
     }
 
     //TODO: zmienić na gotową funkcę
-    for (int i = 0; i < dataLength; i++) {
+    for (int i = 0; i < bufferLength; i++) {
         if (((buffer[i] < 65 || buffer[i] > 90) && (buffer[i] < 97 || buffer[i] > 122)) && buffer[i] != 32) {
             printf("WRONG INPUT: %c\n", buffer[i]);
-            return -1;
+            return false;
         }
     }
 
     // return ERROR when space on first or last char
-    if (buffer[0] == ' ' || buffer[dataLength-1] == ' ') {
-        return -1;
+    if (buffer[0] == ' ' || buffer[bufferLength-1] == ' ') {
+        return false;
     }
 
     // return ERROR when two consecutive spaces found
-    for(int i = 0; i < dataLength; i++) {
+    for(int i = 0; i < bufferLength; i++) {
         if(buffer[i] == ' ' && buffer[i+1] == ' ') {
-            return -1;
+            return false;
         }
     }
-    return dataLength;
+    return true;
 }
 
 void correctInput(char *buffer, char *correctedInput, int inputLength) {
@@ -302,6 +293,21 @@ int isCompleteQuery(char *buffer, int inputLength) {
     return 0;
 }
 
+int sendResults(int sock, char *message) {
+    void *dataPtr = message;
+    size_t data_len = strlen(message);
+
+    while (data_len > 0) {
+        ssize_t bytes_written = write_verbose(sock, dataPtr, data_len);
+        if (bytes_written < 0) {
+            return -1;
+        }
+        dataPtr = dataPtr + bytes_written;
+        data_len = data_len - bytes_written;
+    }
+    return 0;
+}
+
 ssize_t read_is_palindrome_write(int sock, char *bufferFromAllBuffers)
 {
     char outputMessage[12] = "";
@@ -337,11 +343,36 @@ ssize_t read_is_palindrome_write(int sock, char *bufferFromAllBuffers)
             if ((client->buffer[i] == '\n' && client->buffer[i - 1] == '\r')) {
                 //  /r/n found in previous query
                 printf("End found\n");
-            }
-        }
+                client->buffer[i-1] = '\0';
+                if (bufferIsValid(client->buffer, i-1)) {
+                    countWords(client->buffer, &numberOfPalindromes, &numberOfAllWords);
+                    snprintf(outputMessage, sizeof(outputMessage), "%d/%d\r\n", numberOfPalindromes, numberOfAllWords);
+                } else {
+                    snprintf(outputMessage, sizeof(outputMessage), "%s", "ERROR\r\n");
+                }
+                printf("%s", outputMessage);
+                sendResults(sock, outputMessage);
 
-        skip_reading:
-/*
+                // Move the rest of buffer to beginning
+                i++; // i is at \n + 1
+//                if (i < client->data_size) {
+                    char tmp_buf[1024] = {0};
+                    printf("data_size %d before move: %s to move: %s\n", client->data_size, client->buffer, &client->buffer[i]);
+                    memcpy(tmp_buf, &client->buffer[i], client->data_size - i);
+                    memset(client->buffer, 0, client->data_size);
+                    mempcpy(client->buffer, tmp_buf, client->data_size - i);
+
+                    client->data_size -= i;
+                    i = 0;
+                    numberOfPalindromes = 0;
+                    numberOfAllWords = 0;
+                    printf("data_size %d after move: %s\n", client->data_size, client->buffer);
+//                }
+
+            }
+
+        }
+        /*
 
         oneQueryLength = isCompleteQuery(wholeBuf, strlen(wholeBuf));
         queryToMoveLen = oneQueryLength;
@@ -525,7 +556,7 @@ void epoll_loop(int srv_sock)
 
 int main(int argc, char * argv[])
 {
-    long int srv_port = 2021;
+    long int srv_port = 2022;
     int srv_sock;
 //    void (*main_loop)(int);
 
