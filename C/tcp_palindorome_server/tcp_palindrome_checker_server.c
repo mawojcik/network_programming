@@ -41,12 +41,15 @@
 #include <sys/syscall.h>
 
 #define MAX_CLIENTS_NUMBER 500
+char allBuffers[MAX_CLIENTS_NUMBER][1024];
 
 struct client {
-    char buffer[1024];
+    char buffer[1025];
     int data_size;
 };
 struct client clients[MAX_CLIENTS_NUMBER];
+
+
 
 // Standardowa procedura tworząca nasłuchujące gniazdko TCP.
 
@@ -280,19 +283,6 @@ void countWords(char *buffer, int *numberOfPalindomes, int *numberOfAllWords) {
     }
 }
 
-
-int isCompleteQuery(char *buffer, int inputLength) {
-    for (int i = 1; i <= inputLength; i++) {
-        if ((buffer[i] == 10 && buffer[i - 1] == 13)) {
-            // return length of current query
-            return i + 1;
-            // return at least 2 bytes ('\r' and '\n')
-        }
-    }
-    // no CR LF encountered
-    return 0;
-}
-
 int sendResults(int sock, char *message) {
     void *dataPtr = message;
     size_t data_len = strlen(message);
@@ -311,117 +301,61 @@ int sendResults(int sock, char *message) {
 ssize_t read_is_palindrome_write(int sock, char *bufferFromAllBuffers)
 {
     char outputMessage[12] = "";
-    char * dataPtr;
-    int oneQueryLength = 0;
+    int numberOfPalindromes = 0;
+    int numberOfAllWords = 0;
+    char correctedInput[1024] = "";
+    struct client * client = &clients[sock];
 
+    int bytes_read = read_verbose(sock,
+                                  &client->buffer[client->data_size],
+                                  sizeof(clients[sock].buffer) - client->data_size+1);
 
-    int inputWithoutCRLFLength = 0;
-    int queryToMoveLen = 0;
-//    do {
-        int numberOfPalindromes = 0;
-        int numberOfAllWords = 0;
-        char correctedInput[1024] = "";
-        struct client * client = &clients[sock];
+    printf("buffer= %s\n", client->buffer);
 
-        int bytes_read = read_verbose(sock,
-                                      &client->buffer[client->data_size],
-                                      sizeof(clients[sock].buffer) - client->data_size);
+    if (bytes_read < 0) {
+        return -1;
+    }
+    if (bytes_read == 0) {
+        printf("Connection closed\n");
+        memset(client->buffer, 0, client->data_size) ;
+        client->data_size = 0;
+        return -1;
+    }
+    client->data_size += bytes_read;
 
-        printf("buffer= %s\n", client->buffer);
-        if (bytes_read < 0 || bytes_read > 1024) {
-            return -1;
-        }
-        if (bytes_read == 0) {
-            printf("Connection closed\n");
-            memset(client->buffer, 0, client->data_size) ;
-            client->data_size = 0;
-            return -1;
-        }
-        client->data_size += bytes_read;
+    for (int i = 0; i < client->data_size; i++) {
+        if ((client->buffer[i] == '\n' && client->buffer[i - 1] == '\r')) {
+            //  /r/n found in previous query
+            printf("End found\n");
+            client->buffer[i-1] = '\0';
+            if (bufferIsValid(client->buffer, i-1)) {
+                countWords(client->buffer, &numberOfPalindromes, &numberOfAllWords);
+                snprintf(outputMessage, sizeof(outputMessage), "%d/%d\r\n", numberOfPalindromes, numberOfAllWords);
+            } else {
+                snprintf(outputMessage, sizeof(outputMessage), "%s", "ERROR\r\n");
+            }
+            printf("%s", outputMessage);
+            sendResults(sock, outputMessage);
 
-        for (int i = 0; i < client->data_size; i++) {
-            if ((client->buffer[i] == '\n' && client->buffer[i - 1] == '\r')) {
-                //  /r/n found in previous query
-                printf("End found\n");
-                client->buffer[i-1] = '\0';
-                if (bufferIsValid(client->buffer, i-1)) {
-                    countWords(client->buffer, &numberOfPalindromes, &numberOfAllWords);
-                    snprintf(outputMessage, sizeof(outputMessage), "%d/%d\r\n", numberOfPalindromes, numberOfAllWords);
-                } else {
-                    snprintf(outputMessage, sizeof(outputMessage), "%s", "ERROR\r\n");
-                }
-                printf("%s", outputMessage);
-                sendResults(sock, outputMessage);
-
-                // Move the rest of buffer to beginning
-                i++; // i is at \n + 1
+            // Move the rest of buffer to beginning
+            i++; // i is at \n + 1
 //                if (i < client->data_size) {
-                    char tmp_buf[1024] = {0};
-                    printf("data_size %d before move: %s to move: %s\n", client->data_size, client->buffer, &client->buffer[i]);
-                    memcpy(tmp_buf, &client->buffer[i], client->data_size - i);
-                    memset(client->buffer, 0, client->data_size);
-                    mempcpy(client->buffer, tmp_buf, client->data_size - i);
+                char tmp_buf[1024] = {0};
+                printf("data_size %d before move: %s to move: %s\n", client->data_size, client->buffer, &client->buffer[i]);
+                memcpy(tmp_buf, &client->buffer[i], client->data_size - i);
+                memset(client->buffer, 0, client->data_size);
+                mempcpy(client->buffer, tmp_buf, client->data_size - i);
 
-                    client->data_size -= i;
-                    i = 0;
-                    numberOfPalindromes = 0;
-                    numberOfAllWords = 0;
-                    printf("data_size %d after move: %s\n", client->data_size, client->buffer);
+                client->data_size -= i;
+                i = 0;
+                numberOfPalindromes = 0;
+                numberOfAllWords = 0;
+                printf("data_size %d after move: %s\n", client->data_size, client->buffer);
 //                }
 
-            }
-
         }
-        /*
 
-        oneQueryLength = isCompleteQuery(wholeBuf, strlen(wholeBuf));
-        queryToMoveLen = oneQueryLength;
-        //deleting first valid query from wholeBuf:
-        if (oneQueryLength > 0) {
-            //query - first found valid query
-            //clear query
-            strcpy(query, "");
-            memcpy(query, wholeBuf, oneQueryLength);
-
-            inputWithoutCRLFLength = bufferValidator(query, oneQueryLength);
-            if (inputWithoutCRLFLength == -1) {
-                snprintf(outputMessage, sizeof(outputMessage), "%s", "ERROR\r\n");
-                printf("%s", "ERROR\r\n");
-            } else {
-                correctInput(query, correctedInput, inputWithoutCRLFLength);
-                countWords(correctedInput, &numberOfPalindromes, &numberOfAllWords);
-                snprintf(outputMessage, sizeof(outputMessage), "%d/%d\r\n", numberOfPalindromes, numberOfAllWords);
-                printf("%d/%d\r\n", numberOfPalindromes, numberOfAllWords);
-            }
-
-            // send results:
-            dataPtr = outputMessage;
-            size_t data_len = strlen(outputMessage);
-            while (data_len > 0) {
-                ssize_t bytes_written = write_verbose(sock, dataPtr, data_len);
-                if (bytes_written < 0) {
-                    return -1;
-                }
-                dataPtr = dataPtr + bytes_written;
-                data_len = data_len - bytes_written;
-            }
-
-            memmove(wholeBuf, wholeBuf+queryToMoveLen, strlen(wholeBuf) - queryToMoveLen); // nie powinienem usuwać z /r/n?????????????
-            for (int i = strlen(wholeBuf) - queryToMoveLen; i < 1024; i++) {
-                wholeBuf[i] = '\0';
-            }
-            // clean bufferFromAllBuffers:
-            for (int i = 0; i < 1024; i++) {
-                bufferFromAllBuffers[i] = '\0';
-            }
-            memcpy(bufferFromAllBuffers, wholeBuf, strlen(wholeBuf));
-
-            oneQueryLength = isCompleteQuery(wholeBuf, strlen(wholeBuf));
-        }
-            */
-
-//    } while (oneQueryLength != 0);
-
+    }
     return bytes_read;
 }
 
@@ -451,10 +385,9 @@ int remove_fd_from_epoll(int fd, int epoll_fd)
     return rv;
 }
 
+
+
 #define MAX_EVENTS 8
-char allBuffers[MAX_CLIENTS_NUMBER][1024];
-
-
 
 void epoll_loop(int srv_sock)
 {
@@ -525,62 +458,12 @@ void epoll_loop(int srv_sock)
 
     cleanup_epoll:
     close_verbose(epoll_fd);
-
-    // W tym miejscu należałoby zamknąć otwarte połączenia z klientami, ale
-    // nie dysponujemy żadną listą ani zbiorem z numerami ich deskryptorów.
 }
-
-// Powyższa funkcja używała epoll w kontekście jednego wątku. W rzeczywistych
-// serwerach, takich jak Apache czy nginx, liczba wątków zazwyczaj jest
-// proporcjonalna do liczby rdzeni obliczeniowych w komputerze. Pojawiają
-// się wtedy dodatkowe problemy związane z synchronizacją, ze sprawiedliwym
-// podziałem pracy pomiędzy wątki, itd.
-//
-// I oczywiście w rzeczywistych serwerach obliczenia wykonywane na danych są
-// znacznie bardziej skomplikowane. Niezbędne dane wejściowe prawdopodobnie
-// przyjdą w wielu porcjach, wygenerowana odpowiedź może być zbyt duża aby
-// dało się ją jednym wywołaniem write() odesłać bez blokowania, itd.
-//
-// Osobom na serio zainteresowanym tym, jak działają rzeczywiste serwery
-// obsługujące setki/tysiące połączeń na sekundę polecam więc przestudiowanie
-// ich kodu źródłowego.
-
-// Do napisania została jeszcze tylko funkcja main, i to będzie wszystko.
-
-//const struct {
-//    const char * name;
-//    void (*func_ptr)(int);
-//} srv_modes[] = {
-//        { "epoll", epoll_loop },
-//};
 
 int main(int argc, char * argv[])
 {
-    long int srv_port = 2022;
+    long int srv_port = 2021;
     int srv_sock;
-//    void (*main_loop)(int);
-
-    // Przetwórz argumenty podane w linii komend, ustaw na ich podstawie
-    // wartości zmiennych srv_port i main_loop.
-
-//    main_loop = NULL;
-//    for (int i = 0; i < sizeof(srv_modes) / sizeof(srv_modes[0]); ++i) {
-//        if (strcmp(argv[1], srv_modes[i].name) == 0) {
-//            main_loop = srv_modes[i].func_ptr;
-//            break;
-//        }
-//    }
-//    if (main_loop == NULL) {
-//        goto bad_args;
-//    }
-
-//    char * p;
-//    errno = 0;
-//    srv_port = strtol(argv[2], &p, 10);
-//    if (errno != 0 || *p != '\0' || srv_port < 1024 || srv_port > 65535) {
-//        goto bad_args;
-//    }
-
     // Stwórz gniazdko i uruchom pętlę odbierającą przychodzące połączenia.
 
     if ((srv_sock = listening_socket_tcp_ipv4(srv_port)) == -1) {
@@ -598,13 +481,6 @@ int main(int argc, char * argv[])
 
     return 0;
 
-//    bad_args:
-//    fprintf(stderr, "Usage: %s mode port\n", argv[0]);
-//    fprintf(stderr, "available server modes:\n");
-//    for (int i = 0; i < sizeof(srv_modes) / sizeof(srv_modes[0]); ++i) {
-//        fprintf(stderr, "    %s\n", srv_modes[i].name);
-//    }
-//    fprintf(stderr, "listening port number range: 1024-65535\n");
     fail:
     return 1;
 }
