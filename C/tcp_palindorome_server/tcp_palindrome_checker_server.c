@@ -40,6 +40,14 @@
 #include <sys/epoll.h>
 #include <sys/syscall.h>
 
+#define MAX_CLIENTS_NUMBER 500
+
+struct client {
+    char buffer[1024];
+    int data_size;
+};
+struct client clients[MAX_CLIENTS_NUMBER];
+
 // Standardowa procedura tworząca nasłuchujące gniazdko TCP.
 
 int listening_socket_tcp_ipv4(in_port_t port)
@@ -204,7 +212,7 @@ int close_verbose(int fd)
 
 int bufferValidator(char *buffer, int bufferLength) {
     int dataLength = bufferLength;
-    
+
     if ((buffer[bufferLength-2] == 13 && buffer[bufferLength - 1] == 10)) {
         dataLength = dataLength - 2;
     } else {
@@ -298,41 +306,42 @@ ssize_t read_is_palindrome_write(int sock, char *bufferFromAllBuffers)
 {
     char outputMessage[12] = "";
     char * dataPtr;
-    char query[1024] = "";
     int oneQueryLength = 0;
-    char wholeBuf[2048] = "";
-    memcpy(wholeBuf, bufferFromAllBuffers, strlen(bufferFromAllBuffers));
 
-    ssize_t bytes_read = 0;
+
     int inputWithoutCRLFLength = 0;
     int queryToMoveLen = 0;
-    do {
+//    do {
         int numberOfPalindromes = 0;
         int numberOfAllWords = 0;
         char correctedInput[1024] = "";
+        struct client * client = &clients[sock];
 
-        // ---> if \r\n not found in buffer, read from socket
-        for (int i = 0; i < strlen(wholeBuf); i++) {
-            if ((wholeBuf[i] == 10 && wholeBuf[i - 1] == 13)) {
-                //  /r/n found in previous query
-                goto skip_reading;
-            }
-        }
+        int bytes_read = read_verbose(sock,
+                                      &client->buffer[client->data_size],
+                                      sizeof(clients[sock].buffer) - client->data_size);
 
-        char readBuf[2048] = "";
-        bytes_read = read_verbose(sock, readBuf, sizeof(readBuf));
+        printf("buffer= %s\n", client->buffer);
         if (bytes_read < 0 || bytes_read > 1024) {
             return -1;
         }
         if (bytes_read == 0) {
             printf("Connection closed\n");
+            memset(client->buffer, 0, client->data_size) ;
+            client->data_size = 0;
             return -1;
         }
-        //wholeBuf = wholeBuf + readBuf
-        sprintf(wholeBuf + strlen(wholeBuf), "%s", readBuf);
+        client->data_size += bytes_read;
 
+        for (int i = 0; i < client->data_size; i++) {
+            if ((client->buffer[i] == '\n' && client->buffer[i - 1] == '\r')) {
+                //  /r/n found in previous query
+                printf("End found\n");
+            }
+        }
 
         skip_reading:
+/*
 
         oneQueryLength = isCompleteQuery(wholeBuf, strlen(wholeBuf));
         queryToMoveLen = oneQueryLength;
@@ -353,7 +362,7 @@ ssize_t read_is_palindrome_write(int sock, char *bufferFromAllBuffers)
                 snprintf(outputMessage, sizeof(outputMessage), "%d/%d\r\n", numberOfPalindromes, numberOfAllWords);
                 printf("%d/%d\r\n", numberOfPalindromes, numberOfAllWords);
             }
-            
+
             // send results:
             dataPtr = outputMessage;
             size_t data_len = strlen(outputMessage);
@@ -378,8 +387,10 @@ ssize_t read_is_palindrome_write(int sock, char *bufferFromAllBuffers)
 
             oneQueryLength = isCompleteQuery(wholeBuf, strlen(wholeBuf));
         }
-    } while (oneQueryLength != 0);
-    
+            */
+
+//    } while (oneQueryLength != 0);
+
     return bytes_read;
 }
 
@@ -410,14 +421,9 @@ int remove_fd_from_epoll(int fd, int epoll_fd)
 }
 
 #define MAX_EVENTS 8
-#define MAX_CLIENTS_NUMBER 500
 char allBuffers[MAX_CLIENTS_NUMBER][1024];
 
-struct client {
-    char buffer[1024];
-    int data_size;
-};
-struct client clients[MAX_CLIENTS_NUMBER];
+
 
 void epoll_loop(int srv_sock)
 {
