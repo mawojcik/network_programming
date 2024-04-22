@@ -220,7 +220,7 @@ bool bufferIsValid(char *buffer, int bufferLength) {
 
     //TODO: zmienić na gotową funkcę
     for (int i = 0; i < bufferLength; i++) {
-        if (((buffer[i] < 65 || buffer[i] > 90) && (buffer[i] < 97 || buffer[i] > 122)) && buffer[i] != 32) {
+        if (((buffer[i] < 'A' || buffer[i] > 'Z') && (buffer[i] < 'a' || buffer[i] > 'z')) && buffer[i] != ' ') {
             printf("WRONG INPUT: %c\n", buffer[i]);
             return false;
         }
@@ -462,7 +462,7 @@ void epoll_loop(int srv_sock)
 
 int main(int argc, char * argv[])
 {
-    long int srv_port = 2021;
+    long int srv_port = 2020;
     int srv_sock;
     // Stwórz gniazdko i uruchom pętlę odbierającą przychodzące połączenia.
 
