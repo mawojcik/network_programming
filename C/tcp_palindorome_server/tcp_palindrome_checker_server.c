@@ -38,7 +38,6 @@
 #include <sys/syscall.h>
 
 #define MAX_CLIENTS_NUMBER 500
-char allBuffers[MAX_CLIENTS_NUMBER][1024];
 
 struct client {
     char buffer[1025];
@@ -425,18 +424,9 @@ void epoll_loop(int srv_sock)
 
             } else {    // fd != srv_sock
                 // wybierz odpowiedni bufer
-                printf("DATA ON FD: ");
-                for (int j = 0; j < strlen(allBuffers[fd]); j++) {
-                    printf("j=%d %d ", j, allBuffers[fd][j]);
-                }
-                printf("\n");
                 if (read_is_palindrome_write(fd) < 0) {
                     // druga strona zamknęła połączenie lub wystąpił błąd
                     remove_fd_from_epoll(fd, epoll_fd);
-                    // clead used buffer
-                    for (int k = 0; k < 1024; k++) {
-                        allBuffers[fd][k] = '\0';
-                    }
                     close_verbose(fd);
                 }
 
