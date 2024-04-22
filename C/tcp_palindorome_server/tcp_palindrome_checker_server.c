@@ -23,9 +23,7 @@
 #include <signal.h>
 #include <stdarg.h>
 #include <stdbool.h>
-#include <stdint.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
@@ -33,7 +31,6 @@
 #include <netinet/in.h>
 #include <sys/select.h>
 #include <sys/socket.h>
-#include <sys/types.h>
 #include <ctype.h>
 
 // Te dwa pliki nagłówkowe są specyficzne dla Linuksa z biblioteką glibc:
@@ -93,7 +90,7 @@ void log_printf(const char * fmt, ...)
 {
     // bufor na przyrostowo budowany komunikat, len mówi ile już znaków ma
     char buf[1024];
-    int len = 0;
+    int len;
 
     struct timespec date_unix;
     struct tm date_human;
@@ -218,7 +215,6 @@ bool bufferIsValid(char *buffer, int bufferLength) {
         return true;
     }
 
-    //TODO: zmienić na gotową funkcę
     for (int i = 0; i < bufferLength; i++) {
         if (((buffer[i] < 'A' || buffer[i] > 'Z') && (buffer[i] < 'a' || buffer[i] > 'z')) && buffer[i] != ' ') {
             printf("WRONG INPUT: %c\n", buffer[i]);
@@ -240,32 +236,27 @@ bool bufferIsValid(char *buffer, int bufferLength) {
     return true;
 }
 
-void correctInput(char *buffer, char *correctedInput, int inputLength) {
-    // copy data from buffer to correctedInput without optional ending chars
-    memcpy(correctedInput, buffer, inputLength);
-}
-
 void toLower(char *word) {
     for(int i = 0; i < strlen(word); i++) {
         word[i] = tolower(word[i]);
     }
 }
 
-int isPalindrome(char word[]) {
+bool isPalindrome(char word[]) {
     int leftIndex = 0;
     int rightIndex = strlen(word) - 1;
     if (rightIndex == 0) {
-        return 1;
+        return true;
     }
 
     while (leftIndex < rightIndex) {
         if (word[leftIndex] != word[rightIndex]) {
-            return 0;
+            return false;
         }
         leftIndex++;
         rightIndex--;
     }
-    return 1;
+    return true;
 }
 
 void countWords(char *buffer, int *numberOfPalindomes, int *numberOfAllWords) {
@@ -284,7 +275,7 @@ void countWords(char *buffer, int *numberOfPalindomes, int *numberOfAllWords) {
 }
 
 int sendResults(int sock, char *message) {
-    void *dataPtr = message;
+    char *dataPtr = message;
     size_t data_len = strlen(message);
 
     while (data_len > 0) {
@@ -298,12 +289,11 @@ int sendResults(int sock, char *message) {
     return 0;
 }
 
-ssize_t read_is_palindrome_write(int sock, char *bufferFromAllBuffers)
+ssize_t read_is_palindrome_write(int sock)
 {
     char outputMessage[12] = "";
     int numberOfPalindromes = 0;
     int numberOfAllWords = 0;
-    char correctedInput[1024] = "";
     struct client * client = &clients[sock];
 
     int bytes_read = read_verbose(sock,
@@ -339,19 +329,17 @@ ssize_t read_is_palindrome_write(int sock, char *bufferFromAllBuffers)
 
             // Move the rest of buffer to beginning
             i++; // i is at \n + 1
-//                if (i < client->data_size) {
-                char tmp_buf[1024] = {0};
-                printf("data_size %d before move: %s to move: %s\n", client->data_size, client->buffer, &client->buffer[i]);
-                memcpy(tmp_buf, &client->buffer[i], client->data_size - i);
-                memset(client->buffer, 0, client->data_size);
-                mempcpy(client->buffer, tmp_buf, client->data_size - i);
+            char tmp_buf[1024] = {0};
+            printf("data_size %d before move: %s to move: %s\n", client->data_size, client->buffer, &client->buffer[i]);
+            memcpy(tmp_buf, &client->buffer[i], client->data_size - i);
+            memset(client->buffer, 0, client->data_size);
+            mempcpy(client->buffer, tmp_buf, client->data_size - i);
 
-                client->data_size -= i;
-                i = 0;
-                numberOfPalindromes = 0;
-                numberOfAllWords = 0;
-                printf("data_size %d after move: %s\n", client->data_size, client->buffer);
-//                }
+            client->data_size -= i;
+            i = 0;
+            numberOfPalindromes = 0;
+            numberOfAllWords = 0;
+            printf("data_size %d after move: %s\n", client->data_size, client->buffer);
 
         }
 
@@ -438,16 +426,16 @@ void epoll_loop(int srv_sock)
             } else {    // fd != srv_sock
                 // wybierz odpowiedni bufer
                 printf("DATA ON FD: ");
-                for (int i = 0; i < strlen(allBuffers[fd]); i++) {
-                    printf("i=%d %d ", i, allBuffers[fd][i]);
+                for (int j = 0; j < strlen(allBuffers[fd]); j++) {
+                    printf("j=%d %d ", j, allBuffers[fd][j]);
                 }
                 printf("\n");
-                if (read_is_palindrome_write(fd, allBuffers[fd]) < 0) {
+                if (read_is_palindrome_write(fd) < 0) {
                     // druga strona zamknęła połączenie lub wystąpił błąd
                     remove_fd_from_epoll(fd, epoll_fd);
                     // clead used buffer
-                    for (int j = 0; i < 1024; i++) {
-                        allBuffers[fd][j] = '\0';
+                    for (int k = 0; k < 1024; k++) {
+                        allBuffers[fd][k] = '\0';
                     }
                     close_verbose(fd);
                 }
