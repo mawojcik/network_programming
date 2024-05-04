@@ -11,7 +11,8 @@ def validate_website(website_url):
                 print('valid website')
                 sys.exit(0)
     except requests.exceptions.RequestException:
-        print('invalid website')
+        pass
+    print('invalid website')
     sys.exit(1)
 
 
