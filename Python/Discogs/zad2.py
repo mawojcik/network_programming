@@ -41,6 +41,9 @@ def request_artist_data(website_url):
             for group in data['groups']:
                 groups.append(group['name'])
             return Artist(data['name'], groups)
+        elif response.status_code == 429:
+            print("Too many requests!")
+            sys.exit(1)
     except requests.exceptions.RequestException:
         print("Problem with sending API request")
     sys.exit(1)
