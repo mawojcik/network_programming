@@ -32,7 +32,7 @@ class Band:
 def request_artist_data(website_url):
     try:
         response = requests.get(website_url)
-        if response.status_code == 200 and 'application/json' in response.headers.get('content-type'):
+        if response.status_code == 200:
             data = json.loads(response.text)
             if 'groups' not in data:
                 print(f"No artist with ID: {data['id']} found!")
@@ -46,6 +46,8 @@ def request_artist_data(website_url):
             sys.exit(1)
     except requests.exceptions.RequestException:
         print("Problem with sending API request")
+    except json.JSONDecodeError as e:
+        print("Invalid JSON syntax:", e)
     sys.exit(1)
 
 
