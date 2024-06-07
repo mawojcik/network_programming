@@ -71,18 +71,29 @@ a częściowo w metodach handle_table() i handle_item().
 '''
         path_info = self.env['PATH_INFO']
         if path_info == '/osoby':
-            self.handle_table()
+            self.handle_table_osoby()
             return
         m = re.search('^/osoby/(?P<id>[0-9]+)$', self.env['PATH_INFO'])
         if m is not None:
-            self.handle_item(m.group('id'))
+            self.handle_item_osoby(m.group('id'))
             return
         if path_info == '/osoby/search':
-            self.handle_search()
+            self.handle_search_osoby()
+            return
+
+        if path_info == '/psy':
+            self.handle_table_psy()
+            return
+        m = re.search('^/psy/(?P<id>[0-9]+)$', self.env['PATH_INFO'])
+        if m is not None:
+            self.handle_psy(m.group('id'))
+            return
+        if path_info == '/psy/search':
+            self.handle_search_psy()
             return
         self.failure('404 Not Found')
 
-    def handle_table(self):
+    def handle_table_osoby(self):
         '''
 Obsługa zapytań odnoszących się do tabeli "osoby" traktowanej jako całość.
 Można ją pobrać, albo można dodać do niej nowy wiersz.
@@ -100,11 +111,7 @@ Można ją pobrać, albo można dodać do niej nowy wiersz.
         else:
             self.failure('501 Not Implemented')
 
-    def handle_item(self, id):
-        '''
-Obsługa zapytań odnoszących się do konkretnego wiersza w tabeli "osoby".
-Można go pobrać, zmodyfikować, albo usunąć.
-'''
+    def handle_item_osoby(self, id):
         if self.env['REQUEST_METHOD'] == 'GET':
             colnames, rows = self.sql_select(id)
             if len(rows) == 0:
@@ -125,7 +132,7 @@ Można go pobrać, zmodyfikować, albo usunąć.
         else:
             self.failure('501 Not Implemented')
 
-    def handle_search(self):
+    def handle_search_osoby(self):
         query_params = parse_qs(self.env['QUERY_STRING'])
         imie = query_params.get('imie', [None])[0]
         nazwisko = query_params.get('nazwisko', [None])[0]
@@ -157,6 +164,77 @@ Można go pobrać, zmodyfikować, albo usunąć.
                 q = f"DELETE FROM osoby WHERE imie = '{imie}'"
             elif nazwisko is not None:
                 q = f"DELETE FROM osoby WHERE nazwisko = '{nazwisko}'"
+            self.sql_modify(q)
+        else:
+            self.failure('501 Not Implemented')
+
+    def handle_table_psy(self):
+        if self.env['REQUEST_METHOD'] == 'GET':
+            colnames, rows = self.sql_select_psy()
+            self.send_rows(colnames, rows)
+        elif self.env['REQUEST_METHOD'] == 'POST':
+            colnames, vals = self.read_tsv()
+            q = 'INSERT INTO psy (' + ', '.join(colnames) + ') VALUES ('
+            q += ', '.join(['?' for v in vals]) + ')'
+            id = self.sql_modify(q, vals)
+            colnames, rows = self.sql_select_psy(id)
+            self.send_rows(colnames, rows)
+        else:
+            self.failure('501 Not Implemented')
+
+    def handle_psy(self, id):
+        if self.env['REQUEST_METHOD'] == 'GET':
+            colnames, rows = self.sql_select_psy(id)
+            if len(rows) == 0:
+                self.failure('404 Not Found')
+            else:
+                self.send_rows(colnames, rows)
+        elif self.env['REQUEST_METHOD'] == 'PUT':
+            colnames, vals = self.read_tsv()
+            q = 'UPDATE psy SET '
+            q += ', '.join([c + ' = ?' for c in colnames])
+            q += ' WHERE id = ' + str(id)
+            self.sql_modify(q, vals)
+            colnames, rows = self.sql_select_psy(id)
+            self.send_rows(colnames, rows)
+        elif self.env['REQUEST_METHOD'] == 'DELETE':
+            q = 'DELETE FROM psy WHERE id = ' + str(id)
+            self.sql_modify(q)
+        else:
+            self.failure('501 Not Implemented')
+
+    def handle_search_psy(self):
+        query_params = parse_qs(self.env['QUERY_STRING'])
+        imie = query_params.get('imie', [None])[0]
+        rasa = query_params.get('rasa', [None])[0]
+
+        if self.env['REQUEST_METHOD'] == 'GET':
+            if imie or rasa:
+                colnames, rows = self.sql_select_psy(None, imie, rasa)
+                self.send_rows(colnames, rows)
+            else:
+                self.failure('400 Bad Request', 'Missing search parameters: imie or rasa')
+        elif self.env['REQUEST_METHOD'] == 'PUT':
+            colnames, vals = self.read_tsv()
+            q = 'UPDATE psy SET '
+            q += ', '.join([c + ' = ?' for c in colnames])
+            if imie is not None and rasa is not None:
+                q += ' WHERE imie = ' + str(imie) + ' AND rasa = ' + str(rasa)
+            elif imie is not None:
+                q += ' WHERE imie = ' + str(imie)
+            elif rasa is not None:
+                q += ' WHERE rasa = ' + str(rasa)
+            self.sql_modify(q, vals)
+            colnames, rows = self.sql_select_psy(None, imie, rasa)
+            self.send_rows(colnames, rows)
+        elif self.env['REQUEST_METHOD'] == 'DELETE':
+            q = ""
+            if imie is not None and rasa is not None:
+                q = f"DELETE FROM psy WHERE imie = '{imie}' AND rasa = '{rasa}'"
+            elif imie is not None:
+                q = f"DELETE FROM psy WHERE imie = '{imie}'"
+            elif rasa is not None:
+                q = f"DELETE FROM psy WHERE rasa = '{rasa}'"
             self.sql_modify(q)
         else:
             self.failure('501 Not Implemented')
@@ -210,6 +288,26 @@ Można go pobrać, zmodyfikować, albo usunąć.
         conn.commit()
         conn.close()
         return rowid
+
+    def sql_select_psy(self, id=None, imie=None, rasa=None):
+        conn = sqlite3.connect(plik_bazy)
+        crsr = conn.cursor()
+        query = 'SELECT * FROM psy'
+        if id is not None:
+            query += f" WHERE id = '{id}'"
+        elif imie is not None and rasa is not None:
+            query += f" WHERE imie = '{imie}' AND rasa = '{rasa}'"
+        elif imie is not None and rasa is None:
+            query += f" WHERE imie = '{imie}'"
+        elif imie is None and rasa is not None:
+            query += f" WHERE rasa = '{rasa}'"
+        print(query)
+        crsr.execute(query)
+        colnames = [d[0] for d in crsr.description]
+        rows = crsr.fetchall()
+        crsr.close()
+        conn.close()
+        return colnames, rows
 
 
 if __name__ == '__main__':

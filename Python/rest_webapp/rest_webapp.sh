@@ -20,6 +20,13 @@ CREATE TABLE osoby (
     telefon TEXT,
     adres TEXT
 );
+CREATE TABLE psy (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    imie VARCHAR,
+    rasa TEXT,
+    owner_id INTEGER,
+    FOREIGN KEY (owner_id) REFERENCES osoby(id) ON DELETE SET NULL
+);
 INSERT INTO osoby VALUES (1, 'Anna', 'Nowak', '+48124569988',
     'Rynek Główny 2, 30-001 Kraków');
 INSERT INTO osoby VALUES (2, 'Jan', 'Kowalski', '+48127770022',
